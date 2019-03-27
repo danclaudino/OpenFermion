@@ -60,7 +60,6 @@ from ._testing_utils import (haar_random_vector,
                              random_hermitian_matrix,
                              random_interaction_operator,
                              random_quadratic_hamiltonian,
-                             random_qubit_operator,
                              random_unitary_matrix,
                              module_importable)
 
@@ -75,10 +74,6 @@ from ._unitary_cc import (uccsd_convert_amplitude_format,
                           uccsd_singlet_generator,
                           uccsd_singlet_get_packed_amplitudes,
                           uccsd_singlet_paramsize)
-
-from ._wedge_product import (generate_parity_permutations,
-                             wedge)
-
 
 # Imports out of alphabetical order to avoid circular dependency.
 from ._jellium_hf_state import hartree_fock_state_jellium

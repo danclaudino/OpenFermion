@@ -98,6 +98,7 @@ def name_molecule(geometry,
                   basis,
                   multiplicity,
                   charge,
+                  reference,
                   description):
     """Function to name molecules.
 
@@ -157,6 +158,9 @@ def name_molecule(geometry,
         name += '_{}+'.format(charge)
     elif charge < 0:
         name += '_{}-'.format(charge)
+
+    #if reference:
+    name += '_{}'.format(reference)
 
     # Optionally add descriptive tag and return.
     if description:
@@ -232,11 +236,14 @@ class MolecularData(object):
         ccsd_energy: Energy from coupled cluster singles + doubles.
         ccsd_single_amps: Numpy array holding single amplitudes
         ccsd_double_amps: Numpy array holding double amplitudes
+        bccd_energy: Energy from Brueckner coupled cluster  doubles.
+        bccd_single_amps: Numpy array holding single amplitudes (probably not needed)
+        bccd_double_amps: Numpy array holding double amplitudes
         general_calculations: A dictionary storing general calculation results
             for this system annotated by the key.
     """
     def __init__(self, geometry=None, basis=None, multiplicity=None,
-                 charge=0, description="", filename="", data_directory=None):
+                 charge=0, reference="rhf", description="", filename="", data_directory=None):
         """Initialize molecular metadata which defines class.
 
         Args:
@@ -250,6 +257,7 @@ class MolecularData(object):
                 to 0.  Only optional if loading from file.
             multiplicity: An integer giving the spin multiplicity.  Only
                 optional if loading from file.
+            reference: defaults to RHF. Can assume UHF and ROHF/
             description: A optional string giving a description. As an
                 example, for dimers a likely description is the bond length
                 (e.g. 0.7414).
@@ -263,7 +271,7 @@ class MolecularData(object):
                 (basis is None) or
                 (multiplicity is None)):
             if filename:
-                if filename[-5:] == '.hdf5':
+                if filename[-6:] == '.hdf5':
                     self.filename = filename[:(len(filename) - 5)]
                 else:
                     self.filename = filename
@@ -284,13 +292,15 @@ class MolecularData(object):
         if (not isinstance(description, basestring)):
             raise TypeError("description must be a string.")
         self.description = description
+        self.reference = reference
 
         # Name molecule and get associated filename
         self.name = name_molecule(geometry, basis, multiplicity,
-                                  charge, description)
+                                  charge, reference, description)
+
         if filename:
-            if filename[-5:] == '.hdf5':
-                filename = filename[:(len(filename) - 5)]
+            if filename[-6:] == '.hdf5':
+                filename = filename[:(len(filename) - 6)]
             self.filename = filename
         else:
             if data_directory is None:
@@ -332,6 +342,9 @@ class MolecularData(object):
         # Attributes generated from CCSD calculation.
         self.ccsd_energy = None
 
+        # Attributes generated from BCCD calculation.
+        self.bccd_energy = None
+
         # General calculation results
         self.general_calculations = {}
 
@@ -363,6 +376,11 @@ class MolecularData(object):
         self._ccsd_single_amps = None
         self._ccsd_double_amps = None
 
+        # Brueckner Coupled cluster amplitudes
+        self._bccd_single_amps = None
+        self._bccd_double_amps = None
+
+    # The following block of property getters and setters allow class
     # The following block of property getters and setters allow class
     # attributes to be used as if they were stored in the class, but are
     # actually loaded only upon request from file.  This greatly speeds up
@@ -489,6 +507,30 @@ class MolecularData(object):
     def ccsd_double_amps(self, value):
         self._ccsd_double_amps = value
 
+    @property
+    def bccd_single_amps(self):
+        if self._bccd_single_amps is None:
+            data = self.get_from_file("bccd_single_amps")
+            self._bccd_single_amps = (data if data is not None and
+                                      data.dtype.num != 0 else None)
+        return self._bccd_single_amps
+
+    @bccd_single_amps.setter
+    def bccd_single_amps(self, value):
+        self._bccd_single_amps = value
+
+    @property
+    def bccd_double_amps(self):
+        if self._bccd_double_amps is None:
+            data = self.get_from_file("bccd_double_amps")
+            self._bccd_double_amps = (data if data is not None and
+                                      data.dtype.num != 0 else None)
+        return self._bccd_double_amps
+
+    @bccd_double_amps.setter
+    def bccd_double_amps(self, value):
+        self._bccd_double_amps = value
+
     def save(self):
         """Method to save the class under a systematic name."""
         # Create a temporary file and swap it to the original name in case
@@ -514,6 +556,8 @@ class MolecularData(object):
             f.create_dataset("multiplicity", data=self.multiplicity)
             # Save charge:
             f.create_dataset("charge", data=self.charge)
+            # Save reference:
+            f.create_dataset("reference", data=numpy.string_(self.reference))
             # Save description:
             f.create_dataset("description",
                              data=numpy.string_(self.description))
@@ -620,6 +664,23 @@ class MolecularData(object):
                              compression=("gzip" if self.ccsd_double_amps
                                           is not None else None))
 
+            # Save attributes generated from BCCD calculation.
+            f.create_dataset("bccd_energy",
+                             data=(self.bccd_energy if
+                                   self.bccd_energy is not None else False))
+            f.create_dataset("bccd_single_amps",
+                             data=(self.bccd_single_amps
+                                   if self.bccd_single_amps is not None else
+                                   False),
+                             compression=("gzip" if self.bccd_single_amps
+                                          is not None else None))
+            f.create_dataset("bccd_double_amps",
+                             data=(self.bccd_double_amps
+                                   if self.bccd_double_amps is
+                                   not None else False),
+                             compression=("gzip" if self.bccd_double_amps
+                                          is not None else None))
+
             # Save general calculation data
             key_list = list(self.general_calculations.keys())
             f.create_dataset("general_calculations_keys",
@@ -659,6 +720,8 @@ class MolecularData(object):
             self.basis = f["basis"][...].tobytes().decode('utf-8')
             # Load multiplicity:
             self.multiplicity = int(f["multiplicity"][...])
+            # Load reference:
+            self.reference = f["reference"][...].tobytes().decode('utf-8')
             # Load charge:
             self.charge = int(f["charge"][...])
             # Load description:
@@ -699,6 +762,8 @@ class MolecularData(object):
             # Load attributes generated from CCSD calculation.
             data = f["ccsd_energy"][...]
             self.ccsd_energy = data if data.dtype.num != 0 else None
+            data = f["bccd_energy"][...]
+            self.bccd_energy = data if data.dtype.num != 0 else None
             # Load general calculations
             if ("general_calculations_keys" in f and
                     "general_calculations_values" in f):
@@ -939,6 +1004,7 @@ def load_molecular_hamiltonian(
         geometry,
         basis,
         multiplicity,
+        reference,
         description,
         n_active_electrons=None,
         n_active_orbitals=None):
@@ -963,7 +1029,7 @@ def load_molecular_hamiltonian(
     """
 
     molecule = MolecularData(
-            geometry, basis, multiplicity, description=description)
+            geometry, basis, multiplicity, reference=reference, description=description)
     molecule.load()
 
     if n_active_electrons is None:

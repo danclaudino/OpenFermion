@@ -58,9 +58,11 @@ class LinearQubitOperatorOptions(object):
         Returns:
             pool(multiprocessing.Pool): A pool of workers.
         """
-        processes = self.get_processes(num or self.processes)
-        logging.info("Calling multiprocessing.Pool(%d)", processes)
-        return multiprocessing.Pool(processes)
+        if self.pool is None:
+            processes = self.get_processes(num or self.processes)
+            logging.info("Calling multiprocessing.Pool(%d)", processes)
+            self.pool = multiprocessing.Pool(processes)
+        return self.pool
 
 
 class LinearQubitOperator(scipy.sparse.linalg.LinearOperator):
