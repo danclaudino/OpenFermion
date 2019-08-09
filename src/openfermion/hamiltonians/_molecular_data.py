@@ -99,6 +99,7 @@ def name_molecule(geometry,
                   multiplicity,
                   charge,
                   reference,
+                  hf_stability,
                   description):
     """Function to name molecules.
 
@@ -109,6 +110,9 @@ def name_molecule(geometry,
         basis: A string giving the basis set. An example is 'cc-pvtz'.
         multiplicity: An integer giving the spin multiplicity.
         charge: An integer giving the total molecular charge.
+        reference: rhf/uhf/rohf. Defaults to rhf.
+        hf_stability: controls whether or not a stability analysis of the
+            reference is performed.
         description: A string giving a description. As an example,
             for dimers a likely description is the bond length (e.g. 0.7414).
 
@@ -161,6 +165,10 @@ def name_molecule(geometry,
 
     #if reference:
     name += '_{}'.format(reference)
+
+    # to run stability analysis
+    if hf_stability:
+        name += '_{}'.format(hf_stability) 
 
     # Optionally add descriptive tag and return.
     if description:
@@ -243,7 +251,7 @@ class MolecularData(object):
             for this system annotated by the key.
     """
     def __init__(self, geometry=None, basis=None, multiplicity=None,
-                 charge=0, reference="rhf", description="", filename="", data_directory=None):
+                 charge=0, reference="rhf", description="", hf_stability="", filename="", data_directory=None):
         """Initialize molecular metadata which defines class.
 
         Args:
@@ -257,7 +265,9 @@ class MolecularData(object):
                 to 0.  Only optional if loading from file.
             multiplicity: An integer giving the spin multiplicity.  Only
                 optional if loading from file.
-            reference: defaults to RHF. Can assume UHF and ROHF/
+            reference: defaults to RHF. Can also assume UHF and ROHF.
+            hf_stability: checks the stability of the HF wavefunction and
+                follows the vector with the lowest eigenvalue.
             description: A optional string giving a description. As an
                 example, for dimers a likely description is the bond length
                 (e.g. 0.7414).
@@ -293,10 +303,11 @@ class MolecularData(object):
             raise TypeError("description must be a string.")
         self.description = description
         self.reference = reference
+        self.hf_stability = hf_stability
 
         # Name molecule and get associated filename
         self.name = name_molecule(geometry, basis, multiplicity,
-                                  charge, reference, description)
+                                  charge, reference, hf_stability, description)
 
         if filename:
             if filename[-6:] == '.hdf5':
@@ -558,6 +569,8 @@ class MolecularData(object):
             f.create_dataset("charge", data=self.charge)
             # Save reference:
             f.create_dataset("reference", data=numpy.string_(self.reference))
+            # Save hf_stability:
+            f.create_dataset("hf_stability", data=numpy.string_(self.hf_stability))
             # Save description:
             f.create_dataset("description",
                              data=numpy.string_(self.description))
@@ -722,6 +735,8 @@ class MolecularData(object):
             self.multiplicity = int(f["multiplicity"][...])
             # Load reference:
             self.reference = f["reference"][...].tobytes().decode('utf-8')
+            # Load hf_stability:
+            self.hf_stability = f["hf_stability"][...].tobytes().decode('utf-8')
             # Load charge:
             self.charge = int(f["charge"][...])
             # Load description:
@@ -1005,6 +1020,7 @@ def load_molecular_hamiltonian(
         basis,
         multiplicity,
         reference,
+        hf_stability,
         description,
         n_active_electrons=None,
         n_active_orbitals=None):
@@ -1018,6 +1034,9 @@ def load_molecular_hamiltonian(
         basis: A string giving the basis set. An example is 'cc-pvtz'.
             Only optional if loading from file.
         multiplicity: An integer giving the spin multiplicity.
+        reference: defaults to RHF. Can also assume UHF and ROHF.
+        hf_stability: checks the stability of the HF wavefunction and
+            follows the vector with the lowest eigenvalue.
         description: A string giving a description.
         n_active_electrons: An optional integer specifying the number of
             electrons desired in the active space.
@@ -1029,7 +1048,7 @@ def load_molecular_hamiltonian(
     """
 
     molecule = MolecularData(
-            geometry, basis, multiplicity, reference=reference, description=description)
+            geometry, basis, multiplicity, reference=reference, hf_stability = hf_stability, description=description)
     molecule.load()
 
     if n_active_electrons is None:
